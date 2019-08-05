@@ -7,3 +7,10 @@ class UnsupportedRecurrence(Exception):
         super().__init__('Unsupported recurrence: %s' % date_string)
         self.date_string = date_string
 
+
+class TIItemNotFoundAfterCommit(Exception):
+    pass
+
+
+class TIProjectNotFound(Exception):
+    pass
