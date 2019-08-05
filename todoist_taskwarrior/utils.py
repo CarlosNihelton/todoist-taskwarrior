@@ -24,16 +24,21 @@ def try_get_model_prop(m, key, default=None):
 
 """ Priorities """
 
-PRIORITY_MAP = {1: None, 2: 'L', 3: 'M', 4: 'H'}
+TI_PRIORITY_MAP = {1: None, 2: 'L', 3: 'M', 4: 'H'}
 
-def parse_priority(priority):
+def ti_priority_to_tw(priority):
     """ Converts a priority from Todoist to Taskwarrior.
 
     Todoist saves priorities as 1, 2, 3, 4, whereas Taskwarrior uses L, M, H.
     These values map very easily to eachother, as Todoist priority 1 indicates that
     no priority has been set.
     """
-    return PRIORITY_MAP[int(priority)]
+    return TI_PRIORITY_MAP[int(priority)]
+
+def tw_priority_to_ti(priority):
+    tw_priority_map = dict(map(reversed, TI_PRIORITY_MAP.items()))
+
+    return tw_priority_map[priority]
 
 """ Strings """
 
@@ -71,8 +76,10 @@ def parse_date(date):
     """
     if not date:
         return None
-
-    return dateutil.parser.parse(date).isoformat()
+ 
+    naive = dateutil.parser.parse(date)
+    dt = naive.replace(tzinfo=None)
+    return dt.strftime('%Y%m%dT%H%M%SZ')
 
 
 def parse_recur(due):

@@ -61,3 +61,12 @@ def with_feedback(description, success_status='OK', error_status='FAILED'):
     else:
         success(success_status)
 
+
+@contextlib.contextmanager
+def on_error(description, error_status='FAILED'):
+    try:
+        yield
+    except Exception as e:
+        info(f'{description}... ', nl=False)
+        error(f'{error_status} ({e})')
+        raise

@@ -1,53 +1,54 @@
 # todoist-taskwarrior
 
-A tool for migrating Todoist tasks to Taskwarrior.
+A tool for syncing Todoist tasks with Taskwarrior.
+
+## Installation
+
+```bash
+git clone https://git.webmeisterei.com/webmeisterei/todoist-taskwarrior.git
+cd todoist-taskwarrior/
+```
+
+- To install in Virtualenv:
+
+```bash
+virtualenv -p /usr/bin/python3 venv
+venv/bin/pip install -r requirements.txt
+venv/bin/python setup.py install
+```
+
+- To install global:
+
+```bash
+sudo pip3 install -r requirements.txt
+sudo python3 setup.py install
+```
+
+## Configure
+
+First optain a Todoist API key from the [Todoist Integrations Settings](https://todoist.com/prefs/integrations).
+
+Now you can configure `titwsync` with (replace `./venv/bin/titwsync` with `titwsync` if you use todoist_taskwarrior without a virtualenv):
+
+```sh
+./venv/bin/titwsync configure --map-project Inbox= --map-project Company=work --map-project Company.SubProject=work.subproject --map-tag books=reading <TODOIST_API_KEY>
+```
+
+`titwsync configure` writes the configuration to `~/.titwsyncrc.yaml`, with the key: `taskwarrior.project_sync.PROJECT_NAME` you can enable or disable the sync of a whole project!
 
 ## Usage
 
 Running the tool requires that your Todoist API key is available from the
 environment under the name `TODOIST_API_KEY`. The key can be found or created in
-the [Todoist Integrations Settings](https://todoist.com/prefs/integrations).
+the ).
 
-The main task is `migrate` which will import all tasks. Since Todoist's internal
+The main task is `sync` which will sync all tasks. Since Todoist's internal
 ID is saved with the task, subsequent runs will detect and skip duplicates:
 
-```sh
-$ python -m todoist_taskwarrior.cli migrate --help
-Usage: cli.py migrate [OPTIONS]
-
-Options:
-  -i, --interactive
-  --no-sync
-  --help             Show this message and exit.
-```
-
-Using the `--interactive` flag will prompt the user for input for each task,
-allowing the task to be modified before import:
+Replace `./venv/bin/titwsync` with `titwsync` if you use todoist_taskwarrior without a virtualenv.
 
 ```sh
-$ python -m todoist_taskwarrior.cli migrate --interactive
-Task 1 of 315: Work on an open source project
-
-tid: 142424242
-name: Work on an open source project
-project: Open Source
-priority:
-tags:
-entry: 2019-01-18T12:00:00+00:00
-due: 2019-01-21T17:00:00+00:00
-recur: 3 days
-```
-
-By default, `migrate` will refetch all tasks from Todoist on each run. To skip
-this step and use the cached data without refetching, use the --no-sync flag.
-
-The flags `--map-project` and `--map-tag` can be specified multiple times to translate or completely remove specific flags
-
-```sh
-$ python -m todoist_taskwarrior.cli migrate \
-    --map-project Errands=chores \
-    --map-project 'XYZ Corp'=work \
-    --map-tag     books=reading
+./venv/bin/titwsync sync
 ```
 
 ## Development
@@ -55,6 +56,14 @@ $ python -m todoist_taskwarrior.cli migrate \
 ### Testing
 
 ```sh
-$ python -m pytest tests
+python -m pytest tests
 ```
 
+## License
+
+Licensed under the MIT license.
+
+## Authors
+
+- 2018-2019 [matt-snider](https://github.com/matt-snider/todoist-taskwarrior)
+- 2019-     [webmeisterei](https://git.webmeisterei.com/webmeisterei/todoist-taskwarrior)
