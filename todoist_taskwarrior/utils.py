@@ -44,6 +44,9 @@ def tw_priority_to_ti(priority):
 
 def maybe_quote_ws(value):
     """Surrounds a value with single quotes if it contains whitespace. """
+    if value is None:
+        return value
+
     if any(x == ' ' or x == '\t' for x in value):
         return "'" + value + "'"
     return value

@@ -30,23 +30,25 @@ def cli():
 
     is_help_cmd = '-h' in sys.argv or '--help' in sys.argv
     rcfile = os.path.expanduser(TITWSYNCRC)
-    with open(rcfile, 'r') as stream:
-        config = yaml.safe_load(stream)
 
-    if 'todoist' not in config or 'api_key' not in config['todoist'] \
-            and not is_help_cmd:
-        log.error('Run configure first. Exiting.')
-        exit(1)
+    if os.path.exists(rcfile):
+        with open(rcfile, 'r') as stream:
+            config = yaml.safe_load(stream)
 
-    todoist = TodoistAPI(config['todoist']['api_key'], cache=TODOIST_CACHE)
+        if 'todoist' not in config or 'api_key' not in config['todoist'] \
+                and not is_help_cmd:
+            log.error('Run configure first. Exiting.')
+            exit(1)
 
-    # Create the TaskWarrior client, overriding config to
-    # create a `todoist_id` field which we'll use to
-    # prevent duplicates
-    taskwarrior = TaskWarrior(config_overrides={
-        'uda.todoist_id.type': 'string',
-        'uda.todoist_sync.type': 'date',
-    })
+        todoist = TodoistAPI(config['todoist']['api_key'], cache=TODOIST_CACHE)
+
+        # Create the TaskWarrior client, overriding config to
+        # create a `todoist_id` field which we'll use to
+        # prevent duplicates
+        taskwarrior = TaskWarrior(config_overrides={
+            'uda.todoist_id.type': 'string',
+            'uda.todoist_sync.type': 'date',
+        })
 
 
 @cli.command()
