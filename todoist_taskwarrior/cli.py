@@ -384,8 +384,11 @@ def _ti_update_task(tw_task, ti_project_list):
             elif ti_task['item']['checked'] == 0 and \
                     tw_task['status'] == 'completed':
                 todoist.items.complete(tid)
+            elif tw_task['status'] == 'waiting':
+                # taskwarrior doesn't like status=waiting
+                del(tw_task['status'])
 
-            tw_task['todoist_sync'] = datetime.datetime.now()
+            tw_task['todoist_sync'] = datetime.datetime.now().isoformat()
             taskwarrior.task_update(tw_task)
         else:
             # Always set latest sync time so no more sync accures
@@ -393,7 +396,11 @@ def _ti_update_task(tw_task, ti_project_list):
             log.info(f'TI updating (todoist_id={tid})...', nl=False)
             log.success('OK')
 
-            tw_task['todoist_sync'] = datetime.datetime.now()
+            # taskwarrior doesn't like status=waiting
+            if tw_task['status'] == 'waiting':
+                del(tw_task['status'])
+
+            tw_task['todoist_sync'] = datetime.datetime.now().isoformat()
             taskwarrior.task_update(tw_task)
 
 
