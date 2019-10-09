@@ -388,7 +388,7 @@ def _ti_update_task(tw_task, ti_project_list):
                 # taskwarrior doesn't like status=waiting
                 del(tw_task['status'])
 
-            tw_task['todoist_sync'] = datetime.datetime.now().isoformat()
+            tw_task['todoist_sync'] = datetime.datetime.now()
             taskwarrior.task_update(tw_task)
         else:
             # Always set latest sync time so no more sync accures
@@ -400,7 +400,7 @@ def _ti_update_task(tw_task, ti_project_list):
             if tw_task['status'] == 'waiting':
                 del(tw_task['status'])
 
-            tw_task['todoist_sync'] = datetime.datetime.now().isoformat()
+            tw_task['todoist_sync'] = datetime.datetime.now()
             taskwarrior.task_update(tw_task)
 
 
