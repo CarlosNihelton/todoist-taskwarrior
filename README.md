@@ -34,6 +34,12 @@ Now you can configure `titwsync` with (replace `./venv/bin/titwsync` with `titws
 ./venv/bin/titwsync configure --map-project Inbox= --map-project Company=work --map-project Company.SubProject=work.subproject --map-tag books=reading <TODOIST_API_KEY>
 ```
 
+If you prefer to map Todoist projects to other Taskwarrior entities (tags, for example) you can:
+```sh
+./venv/bin/titwsync configure --td-project-to tag --map-project Inbox= --map-project Company=work --map-project Company.SubProject=work.subproject --map-tag books=reading <TODOIST_API_KEY>
+```
+The --td-project-to parameter must be a valid Taskwarrior field name or UDA.
+
 `titwsync configure` writes the configuration to `~/.titwsyncrc.yaml`, with the key: `taskwarrior.project_sync.PROJECT_NAME` you can enable or disable the sync of a whole project!
 
 ## Usage
