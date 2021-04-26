@@ -52,6 +52,9 @@ def cli():
 
 
 @cli.command()
+@click.option('-i','--ti-project-in-tw-is', metavar='TI_PROJ_IN_TW_IS_WHAT', multiple=False,
+        default='project', help='Todoist projects might be mapped to a different field in'
+        ' TaskWarrior, if you want. By default it is mapped to the project field.')
 @click.option('-p', '--map-project', metavar='SRC=DST', multiple=True,
               callback=validation.validate_map,
               help='Project names specified will be translated '
@@ -62,7 +65,7 @@ def cli():
               help='Tags specified will be translated from SRC to DST. '
               'If DST is omitted, the tag will be removed when SRC matches.')
 @click.argument('todoist_api_key')
-def configure(map_project, map_tag, todoist_api_key):
+def configure(ti_project_in_tw_is, map_project, map_tag, todoist_api_key):
     """Configure sync.
 
     Use --map-project to change or remove the project. Project hierarchies will
@@ -81,6 +84,7 @@ def configure(map_project, map_tag, todoist_api_key):
     data['todoist']['tag_map'] = map_tag
     data['taskwarrior']['project_sync'] = {
         k: True for k in map_project.values()}
+    data['project_is']=ti_project_in_tw_is
 
     rcfile = os.path.expanduser(TITWSYNCRC)
     with io.open(rcfile, 'w', encoding='utf8') as outfile:
@@ -140,6 +144,7 @@ def sync(ctx):
 
     ti_project_list = _ti_project_list()
     default_project = utils.try_map(config['todoist']['project_map'], 'Inbox')
+    project_is = config['project_is']
 
     config_ps = config['taskwarrior']['project_sync']
 
@@ -147,14 +152,14 @@ def sync(ctx):
     tw_tasks = taskwarrior.load_tasks()
     log.important(f'Starting to sync tasks from Taskwarrior...')
     for tw_task in tw_tasks['pending']:
-        if 'project' not in tw_task:
-            tw_task['project'] = default_project
+        if project_is not in tw_task:
+            tw_task[project_is] = default_project
 
         desc = tw_task['description']
-        project = tw_task['project']
+        project = tw_task[project_is]
 
-        if (tw_task['project'] not in config_ps or
-                not config_ps[tw_task['project']]):
+        if (tw_task[project_is] not in config_ps or
+                not config_ps[tw_task[project_is]]):
             log.warn(f'Ignoring Task {desc} ({project})')
             continue
 
@@ -202,8 +207,8 @@ def sync(ctx):
         # Sync Todoist with Taskwarrior task
         _, tw_task = taskwarrior.get_task(todoist_id=ti_task['id'])
         if bool(tw_task):
-            if 'project' not in tw_task:
-                tw_task['project'] = default_project
+            if project_is not in tw_task:
+                tw_task[project_is] = default_project
             _sync_task(tw_task, c_ti_task, ti_project_list)
             continue
 
@@ -267,12 +272,13 @@ def _tw_add_task(ti_task):
 
     Returns the taskwarrior task.
     """
+    project_is = config['project_is']
     description = ti_task['description']
+    locals()[project_is] = ti_task['project']
     project = ti_task['project']
-    with log.with_feedback(f"Taskwarrior add '{description}' ({project})"):
-        return taskwarrior.task_add(
+    with log.with_feedback(f"Taskwarrior add '{description}' ({locals()[project_is]})"):
+        cmd = """taskwarrior.task_add(
             ti_task['description'],
-            project=ti_task['project'],
             tags=ti_task['tags'],
             priority=ti_task['priority'],
             entry=ti_task['entry'],
@@ -281,7 +287,11 @@ def _tw_add_task(ti_task):
             status=ti_task['status'],
             todoist_id=ti_task['tid'],
             todoist_sync=datetime.datetime.now(),
-        )
+        """
+        cmd = cmd + f" {project_is}='{project}')" # See if this will be a problem.
+        print(cmd)
+        return exec(cmd)
+        
 
 
 def _tw_update_task(tw_task, ti_task):
@@ -290,6 +300,7 @@ def _tw_update_task(tw_task, ti_task):
         return ((ti_task[item] and item not in tw_task) or
                 (item in tw_task and tw_task[item] != ti_task[item]))
 
+    project_is = config['project_is']
     description = ti_task['description']
     project = ti_task['project']
     with log.on_error(f"TW updating '{description}' ({project})"):
@@ -299,8 +310,8 @@ def _tw_update_task(tw_task, ti_task):
             tw_task['description'] = ti_task['description']
             changed = True
 
-        if tw_task['project'] != ti_task['project']:
-            tw_task['project'] = ti_task['project']
+        if tw_task[project_is] != ti_task['project']:
+            tw_task[project_is] = ti_task['project']
             changed = True
 
         if _compare_value('tags'):
@@ -338,7 +349,8 @@ def _tw_update_task(tw_task, ti_task):
 
 def _ti_update_task(tw_task, ti_project_list):
     description = tw_task['description']
-    project = tw_task['project']
+    project_is = config['project_is']
+    project = tw_task[project_is]
     with log.on_error(f"Todoist update '{description}' ({project})"):
         changed = False
 
@@ -348,7 +360,7 @@ def _ti_update_task(tw_task, ti_project_list):
             ti_task['item']['content'] = tw_task['description']
             changed = True
 
-        project = ti_project_list[tw_task['project']]
+        project = ti_project_list[tw_task[project_is]]
         if ti_task['item']['project_id'] != project['id']:
             changed = True
 
@@ -405,18 +417,19 @@ def _ti_update_task(tw_task, ti_project_list):
 
 
 def _ti_add_task(tw_task, ti_project_list):
+    project_is = config['project_is']
     description = tw_task['description']
-    project = tw_task['project']
+    project = tw_task[project_is]
     with log.on_error(f"Todoist add '{description}' ({project})"):
         # Add the item and commit the change
         data = {}
 
-        if tw_task['project'] not in ti_project_list:
-            project = tw_task['project']
+        if tw_task[project_is] not in ti_project_list:
+            project = tw_task[project_is]
             log.error(f'Project "{project}" not found on Todoist.')
             return
 
-        data['project_id'] = ti_project_list[tw_task['project']]['id']
+        data['project_id'] = ti_project_list[tw_task[project_is]]['id']
         if 'priority' in tw_task:
             data['priority'] = utils.tw_priority_to_ti(tw_task['priority'])
 
