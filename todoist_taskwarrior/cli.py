@@ -6,7 +6,8 @@ import dateutil.parser
 import io
 
 import yaml
-from taskw import TaskWarrior
+from tasklib import TaskWarrior
+from tasklib import Task
 from todoist.api import TodoistAPI
 from . import errors, log, utils, validation
 
@@ -45,10 +46,8 @@ def cli():
         # Create the TaskWarrior client, overriding config to
         # create a `todoist_id` field which we'll use to
         # prevent duplicates
-        taskwarrior = TaskWarrior(config_overrides={
-            'uda.todoist_id.type': 'string',
-            'uda.todoist_sync.type': 'date',
-        })
+        taskwarrior = TaskWarrior('~/.task')
+        taskwarrior.overrides.update({'uda.todoist_id.type': 'string','uda.todoist_sync.type': 'date'})
 
 
 @cli.command()
@@ -149,9 +148,9 @@ def sync(ctx):
     config_ps = config['taskwarrior']['project_sync']
 
     # Sync Taskwarrior->Todoist
-    tw_tasks = taskwarrior.load_tasks()
+    tw_tasks = taskwarrior.tasks
     log.important(f'Starting to sync tasks from Taskwarrior...')
-    for tw_task in tw_tasks['pending']:
+    for tw_task in tw_tasks:
         if project_is not in tw_task:
             tw_task[project_is] = default_project
 
@@ -167,9 +166,10 @@ def sync(ctx):
 
         if 'todoist_id' in tw_task:
             ti_task = todoist.items.get_by_id(tw_task['todoist_id'])
-            if ti_task is None:
-                # Ti task has been deleted
-                taskwarrior.task_delete(uuid=tw_task['uuid'])
+            if ti_task is None or ti_task['checked']==True:
+                # Ti task has been deleted, but Todoist free deletes Done tasks.
+                # So for precaution, I'll consider it done.
+                taskwarrior.get_task(uuid=tw_task['uuid']).done()
                 continue
 
             ti_task = ti_task['item']
@@ -179,8 +179,10 @@ def sync(ctx):
             _sync_task(tw_task, c_ti_task, ti_project_list)
             continue
 
-        # Add Todoist task
-        _ti_add_task(tw_task, ti_project_list)
+        # Add Todoist task only if it's not completed nor deleted. Remember that Todoist wipes out
+        # completed tasks.
+        if tw_task.pending or tw_task.active:
+            _ti_add_task(tw_task, ti_project_list)
 
     with log.with_feedback('Syncing tasks with todoist'):
         todoist.commit()
@@ -204,8 +206,9 @@ def sync(ctx):
         log.important(f'Sync Task {desc} ({project}) [id:{ti_task["id"]}]')
 
         # Sync Todoist with Taskwarrior task
-        _, tw_task = taskwarrior.get_task(todoist_id=ti_task['id'])
-        if bool(tw_task):
+        tasks = taskwarrior.tasks.filter(todoist_id=ti_task['id'])
+        if tasks.__len__ == 1:
+            tw_task = tasks.get()
             if project_is not in tw_task:
                 tw_task[project_is] = default_project
             _sync_task(tw_task, c_ti_task, ti_project_list)
@@ -276,20 +279,32 @@ def _tw_add_task(ti_task):
     description = ti_task['description']
     project = ti_task['project']
     with log.with_feedback(f"Taskwarrior add '{description}' ({project})"):
-        cmd = """taskwarrior.task_add(
-            ti_task['description'],
-            tags=ti_task['tags'],
-            priority=ti_task['priority'],
-            entry=ti_task['entry'],
-            due=ti_task['due'],
-            recur=ti_task['recur'],
-            status=ti_task['status'],
-            todoist_id=ti_task['tid'],
-            todoist_sync=datetime.datetime.now(),
-        """
-        cmd = cmd + f" {project_is}='{project}')" # See if this will be a problem.
-        print(cmd)
-        return exec(cmd)
+        new_task = Task(taskwarrior,description=ti_task['description'],
+                tags=ti_task['tags'],
+                priority=ti_task['priority'],
+                due=ti_task['due'],
+                recur=ti_task['recur'],
+                status=ti_task['status'],
+                todoist_id=ti_task['tid'],
+                todoist_sync=datetime.datetime.now(),
+                )
+        new_task[project_is] = project
+        new_task.save()
+
+        # cmd = """taskwarrior.task_add(
+        #     ti_task['description'],
+        #     tags=ti_task['tags'],
+        #     priority=ti_task['priority'],
+        #     entry=ti_task['entry'],
+        #     due=ti_task['due'],
+        #     recur=ti_task['recur'],
+        #     status=ti_task['status'],
+        #     todoist_id=ti_task['tid'],
+        #     todoist_sync=datetime.datetime.now(),
+        # """
+        # cmd = cmd + f" {project_is}='{project}')" # See if this will be a problem.
+        # print(cmd)
+        # return exec(cmd)
         
 
 
@@ -343,7 +358,7 @@ def _tw_update_task(tw_task, ti_task):
             log.success('OK')
 
             tw_task['todoist_sync'] = datetime.datetime.now()
-            taskwarrior.task_update(tw_task)
+            tw_task.save()
 
 
 def _ti_update_task(tw_task, ti_project_list):
@@ -401,7 +416,8 @@ def _ti_update_task(tw_task, ti_project_list):
                 del(tw_task['status'])
 
             tw_task['todoist_sync'] = datetime.datetime.now()
-            taskwarrior.task_update(tw_task)
+            tw_task.save()
+
         else:
             # Always set latest sync time so no more sync accures
             tid = ti_task['item']['id']
@@ -413,7 +429,7 @@ def _ti_update_task(tw_task, ti_project_list):
                 del(tw_task['status'])
 
             tw_task['todoist_sync'] = datetime.datetime.now()
-            taskwarrior.task_update(tw_task)
+            tw_task.save()
 
 
 def _ti_add_task(tw_task, ti_project_list):
@@ -442,7 +458,7 @@ def _ti_add_task(tw_task, ti_project_list):
 
         tw_task['todoist_id'] = tid
         tw_task['todoist_sync'] = datetime.datetime.now()
-        taskwarrior.task_update(tw_task)
+        tw_task.save()
 
 
 def _ti_project_list():
