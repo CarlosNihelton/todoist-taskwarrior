@@ -148,10 +148,10 @@ def sync(ctx):
     config_ps = config['taskwarrior']['project_sync']
 
     # Sync Taskwarrior->Todoist
-    tw_tasks = taskwarrior.tasks
+    tw_tasks = taskwarrior.tasks.all()
     log.important(f'Starting to sync tasks from Taskwarrior...')
     for tw_task in tw_tasks:
-        if project_is not in tw_task:
+        if tw_task[project_is] is None:
             tw_task[project_is] = default_project
 
         desc = tw_task['description']
@@ -164,13 +164,14 @@ def sync(ctx):
         # Log message
         log.important(f'Sync Task {desc} ({project})')
 
-        if 'todoist_id' in tw_task:
+        if tw_task['todoist_id'] is not None:
             ti_task = todoist.items.get_by_id(tw_task['todoist_id'])
-            if ti_task is None or ti_task['checked']==True:
+            if ti_task is None or ti_task['item']['checked']==1:
                 # Ti task has been deleted, but Todoist free deletes Done tasks.
                 # So for precaution, I'll consider it done.
-                taskwarrior.get_task(uuid=tw_task['uuid']).done()
-                continue
+               if tw_task.completed==False:
+                   taskwarrior.get_task(uuid=tw_task['uuid']).done()
+               continue
 
             ti_task = ti_task['item']
             c_ti_task = _convert_ti_task(ti_task, ti_project_list)
@@ -206,12 +207,12 @@ def sync(ctx):
         log.important(f'Sync Task {desc} ({project}) [id:{ti_task["id"]}]')
 
         # Sync Todoist with Taskwarrior task
-        tasks = taskwarrior.tasks.filter(todoist_id=ti_task['id'])
-        if tasks.__len__ == 1:
-            tw_task = tasks.get()
-            if project_is not in tw_task:
-                tw_task[project_is] = default_project
-            _sync_task(tw_task, c_ti_task, ti_project_list)
+        tw_tasks = taskwarrior.tasks.filter(todoist_id=ti_task['id'])
+        if tw_tasks.__len__() > 0:
+            for tw_task in tw_tasks:
+                if tw_task[project_is] is None:
+                    tw_task[project_is] = default_project
+                _sync_task(tw_task, c_ti_task, ti_project_list)
             continue
 
         # Add Taskwarrior task
@@ -247,7 +248,8 @@ def _convert_ti_task(ti_task, ti_project_list):
     ]
 
     # Dates
-    data['entry'] = utils.parse_date(ti_task['date_added'])
+    # data['entry'] = utils.parse_date(ti_task['date_added'])
+    # entry is readonly in tasklib.
     data['due'] = utils.parse_due(utils.try_get_model_prop(ti_task, 'due'))
     data['recur'] = parse_recur_or_prompt(
         utils.try_get_model_prop(ti_task, 'due'))
@@ -258,9 +260,11 @@ def _convert_ti_task(ti_task, ti_project_list):
 
 
 def _sync_task(tw_task, ti_task, ti_project_list):
-    if 'todoist_sync' in tw_task:
+    if tw_task['todoist_sync'] is not None:
         ti_stamp = dateutil.parser.parse(tw_task['todoist_sync']).timestamp()
-        tw_stamp = dateutil.parser.parse(tw_task['modified']).timestamp()
+        # tw_stamp = dateutil.parser.parse(tw_task['modified']).timestamp()
+
+        tw_stamp = tw_task['modified'].timestamp()
 
         if tw_stamp > ti_stamp:
             _ti_update_task(tw_task, ti_project_list)
@@ -311,8 +315,8 @@ def _tw_add_task(ti_task):
 def _tw_update_task(tw_task, ti_task):
 
     def _compare_value(item):
-        return ((ti_task[item] and item not in tw_task) or
-                (item in tw_task and tw_task[item] != ti_task[item]))
+        return ((ti_task[item] and tw_task[item] is None) or
+                (tw_task[item] is not None and tw_task[item] != ti_task[item]))
 
     project_is = config['project_is']
     description = ti_task['description']
@@ -336,9 +340,10 @@ def _tw_update_task(tw_task, ti_task):
             tw_task['priority'] = ti_task['priority']
             changed = True
 
-        if _compare_value('entry'):
-            tw_task['entry'] = ti_task['entry']
-            changed = True
+        # entry is readonly in tasklib
+        # if _compare_value('entry'):
+        #     tw_task['entry'] = ti_task['entry']
+        #     changed = True
 
         if _compare_value('due'):
             tw_task['due'] = ti_task['due']
@@ -380,7 +385,7 @@ def _ti_update_task(tw_task, ti_project_list):
             changed = True
 
         priority = 0
-        if 'priority' in tw_task:
+        if tw_task['priority'] is not None:
             priority = utils.tw_priority_to_ti(tw_task['priority'])
         if ti_task['item']['priority'] != priority:
             ti_task['item']['priority'] = priority
@@ -447,7 +452,7 @@ def _ti_add_task(tw_task, ti_project_list):
             return
 
         
-        if 'priority' in tw_task:
+        if tw_task['priority'] is not None:
             data['priority'] = utils.tw_priority_to_ti(tw_task['priority'])
 
         ti_task = todoist.items.add(tw_task['description'], **data)
